@@ -82,24 +82,56 @@ def deep_model(x_train, kernel_initializer, layers=[32], activations=['relu'], o
     return model
 
 
-def evaluate_model(model, history, x_train, y_train, x_test, y_test, x, y_scaler, val=False, linear=False):
+def evaluate_model(model, history, x_train, y_train, x_test, y_test, x, y_scaler, model_name='', existing_df=None, val=False, linear=False):
     print(plot_model(model))
     print(model.summary())
     if val:
         plot_loss_with_validation(history)
     else:
         plot_loss(history)
-    # Evaluating linear model against Training and Test set
+    # Evaluating model against Training and Test set
     train_eval = model.evaluate(x_train, y_train, verbose=0)
     test_eval = model.evaluate(x_test, y_test, verbose=0)
-    print(f'MSE of training: {train_eval}')
-    print(f'MSE of testing: {test_eval}')
+    
     # Plot linear weights for each column
     if linear:
         print(linear_model_weighs_table(model, x))
     # Predict results in test dataset
     prediction_results = prediction_results_data_frame(x_test, y_test, model, y_scaler)
-    prediction_results.sort_values(by='Real', ascending=False, inplace=True)
+
+    q1 = prediction_results["% error"].describe()['25%']
+    q3 = prediction_results["% error"].describe()['75%']
+    inter_quartile_range = q3 - q1
+    lower_boundary = q1 - 1.5 * inter_quartile_range 
+    upper_boundary = q3 + 1.5 * inter_quartile_range 
+
+    results_without_outliers = prediction_results[prediction_results['% error'].between(lower_boundary, upper_boundary)]
+    no_outliers_index = results_without_outliers.index
+    test_eval_no_outliers = model.evaluate(x_test[no_outliers_index], y_test[no_outliers_index], verbose=0)
+
+    # Print and plot results
+    print_and_plot_results(prediction_results.sort_values(by='Real', ascending=False))
+    plot_model(model)
+    
+    print('Remove outliers from results and recalculate loss')
+    
+    print_and_plot_results(results_without_outliers.sort_values(by='Real', ascending=False))
+
+    print(f'MSE of training: {train_eval}')
+    print(f'MSE of testing: {test_eval}')
+    print(f'MSE of testing without first outliers: {test_eval_no_outliers}')
+
+    df_result = { 'Model Name':  [model_name], 'Testing MSE': test_eval,
+     'Testing MSE after removing outlier': test_eval_no_outliers, 'Training MSE': train_eval }
+    df_result = pd.DataFrame(data=df_result)
+    if existing_df is None:
+        return df_result
+    else:
+        return existing_df.append(df_result, ignore_index=True)
+
+
+
+def print_and_plot_results(prediction_results):
     # Print and plot results
     print(prediction_results)
     plt.plot(prediction_results['Real'], prediction_results['% error'], 'k',
@@ -115,4 +147,3 @@ def evaluate_model(model, history, x_train, y_train, x_test, y_test, x, y_scaler
     plt.title(f'Error - Median: {prediction_results["% error"].median()}%')
     plt.show()
     print(prediction_results["% error"].describe())
-    plot_model(model)
