@@ -1,0 +1,2 @@
+,Model Name,Testing MSE,Testing MSE after removing outlier,Training MSE
+0,PETR: FF | Softplus | Adamax,0.22009673714637756,0.12837465107440948,0.009230845438485796
